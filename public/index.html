@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+<title>你畫我猜</title>
+<script src="/socket.io/socket.io.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root {
+    --primary: #6c5ce7;
+    --bg: #f5f3ff;
+    --card: #ffffff;
+    --text: #2d2d3a;
+    --accent: #00b894;
+    --danger: #e74c3c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  .center-wrap {
+    max-width: 420px;
+    margin: 0 auto;
+    padding: 32px 20px;
+  }
+  h1 { text-align: center; font-size: 24px; margin-bottom: 4px; }
+  .subtitle { text-align: center; color: #888; margin-bottom: 24px; font-size: 14px; }
+  .card {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+    margin-bottom: 16px;
+  }
+  input[type=text] {
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid #ddd;
+    font-size: 16px;
+    margin-bottom: 12px;
+  }
+  button {
+    width: 100%;
+    padding: 12px;
+    border-radius: 10px;
+    border: none;
+    background: var(--primary);
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:active { opacity: 0.85; }
+  button.secondary { background: #eee; color: var(--text); }
+  .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+  .tabs button { background: #eee; color: var(--text); }
+  .tabs button.active { background: var(--primary); color: white; }
+
+  /* --- 遊戲畫面 --- */
+  #gameScreen { display: none; max-width: 720px; margin: 0 auto; padding: 12px; }
+  .top-bar {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 8px; flex-wrap: wrap; gap: 8px;
+  }
+  .room-code { font-weight: 700; font-size: 18px; letter-spacing: 2px; }
+  .timer { font-weight: 700; font-size: 18px; color: var(--primary); }
+  .word-hint { text-align: center; font-size: 20px; letter-spacing: 6px; margin: 8px 0; font-weight: 700; }
+  .status-line { text-align: center; font-size: 14px; color: #666; margin-bottom: 8px; min-height: 18px; }
+
+  #canvasWrap {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+    touch-action: none;
+  }
+  #board { width: 100%; height: 100%; display: block; cursor: crosshair; }
+  .draw-tools { display: flex; gap: 8px; margin: 10px 0; align-items: center; flex-wrap: wrap; }
+  .color-dot {
+    width: 26px; height: 26px; border-radius: 50%; border: 2px solid #ddd; cursor: pointer;
+  }
+  .color-dot.selected { border-color: var(--primary); border-width: 3px; }
+  .draw-tools button { width: auto; padding: 8px 14px; font-size: 14px; }
+
+  #scoreboard { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
+  .player-row {
+    display: flex; justify-content: space-between; padding: 8px 12px;
+    background: white; border-radius: 8px; font-size: 14px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+  }
+  .player-row.drawer { background: #fff3cd; font-weight: 700; }
+
+  #chatBox {
+    height: 140px; overflow-y: auto; background: white; border-radius: 10px;
+    padding: 8px 12px; font-size: 14px; margin-bottom: 8px;
+  }
+  #chatBox div { padding: 3px 0; }
+  #chatBox .correct { color: var(--accent); font-weight: 700; }
+  #chatBox .system { color: #999; font-style: italic; font-size: 12px; }
+
+  .guess-row { display: flex; gap: 8px; }
+  .guess-row input { margin-bottom: 0; flex: 1; }
+  .guess-row button { width: auto; padding: 10px 18px; }
+
+  #qrWrap { text-align: center; margin: 12px 0; }
+  #qrWrap canvas, #qrWrap img { margin: 0 auto; }
+  .room-code-big {
+    text-align: center; font-size: 32px; font-weight: 800; letter-spacing: 6px;
+    color: var(--primary); margin: 8px 0;
+  }
+  .hint-text { font-size: 13px; color: #999; text-align: center; }
+</style>
+</head>
+<body>
+
+<!-- ===== 首頁：建立 / 加入房間 ===== -->
+<div class="center-wrap" id="homeScreen">
+  <h1>🎨 你畫我猜</h1>
+  <div class="subtitle">多人即時連線・掃碼加入・自動計分</div>
+
+  <div class="tabs">
+    <button id="tabCreate" class="active">建立房間</button>
+    <button id="tabJoin">加入房間</button>
+  </div>
+
+  <div class="card" id="createCard">
+    <input type="text" id="createName" placeholder="輸入你的暱稱" maxlength="12" />
+    <button id="btnCreate">建立新房間</button>
+  </div>
+
+  <div class="card" id="joinCard" style="display:none;">
+    <input type="text" id="joinName" placeholder="輸入你的暱稱" maxlength="12" />
+    <input type="text" id="joinCode" placeholder="輸入房號（例如 AB3C7）" maxlength="6" style="text-transform:uppercase;" />
+    <button id="btnJoin">加入房間</button>
+  </div>
+
+  <div class="hint-text" id="homeMsg"></div>
+</div>
+
+<!-- ===== 房間等候畫面（顯示 QR Code）===== -->
+<div class="center-wrap" id="lobbyScreen" style="display:none;">
+  <h1>房間已建立</h1>
+  <div class="subtitle">請其他人掃描下方 QR Code 加入</div>
+  <div class="card">
+    <div class="room-code-big" id="lobbyCode">-----</div>
+    <div id="qrWrap"></div>
+    <div class="hint-text">或直接分享這個連結：<br/><span id="lobbyLink"></span></div>
+  </div>
+  <div class="card">
+    <div style="font-weight:700; margin-bottom:8px;">目前玩家</div>
+    <div id="lobbyPlayers"></div>
+  </div>
+  <div class="hint-text">滿 2 人以上會自動開始遊戲</div>
+</div>
+
+<!-- ===== 遊戲畫面 ===== -->
+<div id="gameScreen">
+  <div class="top-bar">
+    <div class="room-code">房號：<span id="gameRoomCode"></span></div>
+    <div class="timer">⏱ <span id="timerText">--</span>s</div>
+  </div>
+  <div class="status-line" id="statusLine"></div>
+  <div class="word-hint" id="wordHint"></div>
+
+  <div id="canvasWrap">
+    <canvas id="board"></canvas>
+  </div>
+
+  <div class="draw-tools" id="drawTools" style="display:none;">
+    <span class="color-dot selected" style="background:#2d2d3a" data-color="#2d2d3a"></span>
+    <span class="color-dot" style="background:#e74c3c" data-color="#e74c3c"></span>
+    <span class="color-dot" style="background:#0984e3" data-color="#0984e3"></span>
+    <span class="color-dot" style="background:#00b894" data-color="#00b894"></span>
+    <span class="color-dot" style="background:#fdcb6e" data-color="#fdcb6e"></span>
+    <button id="btnClear" class="secondary">清除畫布</button>
+  </div>
+
+  <div id="scoreboard"></div>
+
+  <div id="chatBox"></div>
+  <div class="guess-row">
+    <input type="text" id="guessInput" placeholder="輸入你的答案，按 Enter 送出" />
+    <button id="btnGuess">送出</button>
+  </div>
+</div>
+
+<script>
+const socket = io();
+let selfId = null;
+let isDrawer = false;
+let currentColor = "#2d2d3a";
+let drawing = false;
+let lastPoint = null;
+
+// ---------- 畫面切換 ----------
+function show(id) {
+  ["homeScreen","lobbyScreen","gameScreen"].forEach(s => {
+    document.getElementById(s).style.display = (s === id) ? "block" : "block";
+  });
+  document.getElementById("homeScreen").style.display = id === "homeScreen" ? "block" : "none";
+  document.getElementById("lobbyScreen").style.display = id === "lobbyScreen" ? "block" : "none";
+  document.getElementById("gameScreen").style.display = id === "gameScreen" ? "block" : "none";
+}
+
+// ---------- 首頁 tab 切換 ----------
+document.getElementById("tabCreate").onclick = () => {
+  document.getElementById("tabCreate").classList.add("active");
+  document.getElementById("tabJoin").classList.remove("active");
+  document.getElementById("createCard").style.display = "block";
+  document.getElementById("joinCard").style.display = "none";
+};
+document.getElementById("tabJoin").onclick = () => {
+  document.getElementById("tabJoin").classList.add("active");
+  document.getElementById("tabCreate").classList.remove("active");
+  document.getElementById("joinCard").style.display = "block";
+  document.getElementById("createCard").style.display = "none";
+};
+
+// 若網址帶有 ?room=XXXXX，自動切到加入分頁並帶入房號
+const urlParams = new URLSearchParams(location.search);
+const prefilledRoom = urlParams.get("room");
+if (prefilledRoom) {
+  document.getElementById("tabJoin").click();
+  document.getElementById("joinCode").value = prefilledRoom.toUpperCase();
+}
+
+document.getElementById("btnCreate").onclick = () => {
+  const name = document.getElementById("createName").value.trim() || "房主";
+  socket.emit("createRoom", name);
+};
+document.getElementById("btnJoin").onclick = () => {
+  const name = document.getElementById("joinName").value.trim() || "玩家";
+  const room = document.getElementById("joinCode").value.trim();
+  if (!room) { document.getElementById("homeMsg").textContent = "請輸入房號"; return; }
+  socket.emit("joinRoom", { room, name });
+};
+
+socket.on("errorMsg", (msg) => {
+  document.getElementById("homeMsg").textContent = msg;
+});
+
+// ---------- 加入成功 ----------
+socket.on("joined", (data) => {
+  selfId = data.selfId;
+  document.getElementById("gameRoomCode").textContent = data.roomCode;
+
+  if (!data.roundActive) {
+    // 尚未開始遊戲 -> 顯示等候室 + QR code
+    document.getElementById("lobbyCode").textContent = data.roomCode;
+    const link = `${location.origin}${location.pathname}?room=${data.roomCode}`;
+    document.getElementById("lobbyLink").textContent = link;
+    document.getElementById("qrWrap").innerHTML = "";
+    new QRCode(document.getElementById("qrWrap"), { text: link, width: 200, height: 200 });
+    show("lobbyScreen");
+  } else {
+    show("gameScreen");
+    resizeCanvas();
+    redrawStrokes(data.strokes);
+    if (data.wordMask) document.getElementById("wordHint").textContent = data.wordMask;
+  }
+});
+
+socket.on("waitingForPlayers", () => {
+  document.getElementById("statusLine").textContent = "等待更多玩家加入（至少需要 2 人）...";
+});
+
+// ---------- 玩家列表（等候室 + 遊戲中都會更新）----------
+socket.on("players", (players) => {
+  const lobbyDiv = document.getElementById("lobbyPlayers");
+  if (lobbyDiv) {
+    lobbyDiv.innerHTML = players.map(p => `<div class="player-row">${p.name}</div>`).join("");
+  }
+  const scoreDiv = document.getElementById("scoreboard");
+  const sorted = [...players].sort((a,b) => b.score - a.score);
+  scoreDiv.innerHTML = sorted.map(p => `
+    <div class="player-row ${p.isDrawer ? 'drawer' : ''}">
+      <span>${p.isDrawer ? '✏️ ' : ''}${p.name}${p.id === selfId ? '（你）' : ''}</span>
+      <span>${p.score} 分</span>
+    </div>
+  `).join("");
+});
+
+// ---------- 回合開始 ----------
+socket.on("roundStart", (data) => {
+  show("gameScreen");
+  resizeCanvas();
+  clearCanvasLocal();
+  isDrawer = data.isDrawer;
+
+  document.getElementById("drawTools").style.display = isDrawer ? "flex" : "none";
+  document.getElementById("board").style.pointerEvents = isDrawer ? "auto" : "none";
+
+  if (isDrawer) {
+    document.getElementById("wordHint").textContent = `請畫出：${data.word}`;
+    document.getElementById("statusLine").textContent = "輪到你畫圖！其他人正在猜";
+  } else {
+    document.getElementById("wordHint").textContent = data.wordMask;
+    document.getElementById("statusLine").textContent = `${data.drawerName} 正在畫圖，快來搶答！`;
+  }
+  document.getElementById("timerText").textContent = data.seconds;
+  document.getElementById("chatBox").innerHTML = "";
+});
+
+socket.on("tick", (t) => {
+  document.getElementById("timerText").textContent = t;
+});
+
+socket.on("roundEnd", (data) => {
+  const msgMap = {
+    allCorrect: "所有人都答對了！",
+    timeUp: "時間到！",
+    notEnoughPlayers: "畫圖者離開，回合結束",
+  };
+  document.getElementById("statusLine").textContent = `${msgMap[data.reason] || ""} 正確答案是：${data.word}（即將開始下一回合）`;
+  document.getElementById("wordHint").textContent = data.word;
+});
+
+// ---------- 聊天 / 搶答結果 ----------
+socket.on("systemMsg", (text) => {
+  appendChat(`<div class="system">${text}</div>`);
+});
+socket.on("chatMsg", ({ name, text, correct }) => {
+  appendChat(`<div class="${correct ? 'correct' : ''}">${name}：${text}</div>`);
+});
+socket.on("correctGuess", ({ name, rank, points }) => {
+  appendChat(`<div class="correct">🎉 ${name} 第 ${rank} 個答對，獲得 ${points} 分！</div>`);
+});
+function appendChat(html) {
+  const box = document.getElementById("chatBox");
+  box.insertAdjacentHTML("beforeend", html);
+  box.scrollTop = box.scrollHeight;
+}
+
+// ---------- 搶答輸入 ----------
+function sendGuess() {
+  const input = document.getElementById("guessInput");
+  const text = input.value.trim();
+  if (!text) return;
+  socket.emit("guess", text);
+  input.value = "";
+}
+document.getElementById("btnGuess").onclick = sendGuess;
+document.getElementById("guessInput").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") sendGuess();
+});
+
+// ================= 畫布邏輯 =================
+const canvas = document.getElementById("board");
+const ctx = canvas.getContext("2d");
+
+function resizeCanvas() {
+  const wrap = document.getElementById("canvasWrap");
+  const ratio = window.devicePixelRatio || 1;
+  canvas.width = wrap.clientWidth * ratio;
+  canvas.height = wrap.clientHeight * ratio;
+  ctx.scale(ratio, ratio);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+}
+window.addEventListener("resize", resizeCanvas);
+
+function getPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  const p = e.touches ? e.touches[0] : e;
+  return {
+    x: (p.clientX - rect.left) / rect.width,   // 存成 0~1 比例，讓不同裝置畫面對齊
+    y: (p.clientY - rect.top) / rect.height,
+  };
+}
+
+function drawLine(from, to, color) {
+  const rect = canvas.getBoundingClientRect();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(from.x * rect.width, from.y * rect.height);
+  ctx.lineTo(to.x * rect.width, to.y * rect.height);
+  ctx.stroke();
+}
+
+function startDraw(e) {
+  if (!isDrawer) return;
+  drawing = true;
+  lastPoint = getPos(e);
+}
+function moveDraw(e) {
+  if (!isDrawer || !drawing) return;
+  e.preventDefault();
+  const p = getPos(e);
+  drawLine(lastPoint, p, currentColor);
+  socket.emit("draw", { from: lastPoint, to: p, color: currentColor });
+  lastPoint = p;
+}
+function endDraw() { drawing = false; }
+
+canvas.addEventListener("mousedown", startDraw);
+canvas.addEventListener("mousemove", moveDraw);
+window.addEventListener("mouseup", endDraw);
+canvas.addEventListener("touchstart", startDraw, { passive: true });
+canvas.addEventListener("touchmove", moveDraw, { passive: false });
+window.addEventListener("touchend", endDraw);
+
+document.querySelectorAll(".color-dot").forEach(dot => {
+  dot.onclick = () => {
+    document.querySelectorAll(".color-dot").forEach(d => d.classList.remove("selected"));
+    dot.classList.add("selected");
+    currentColor = dot.dataset.color;
+  };
+});
+document.getElementById("btnClear").onclick = () => {
+  clearCanvasLocal();
+  socket.emit("clearCanvas");
+};
+function clearCanvasLocal() {
+  const rect = canvas.getBoundingClientRect();
+  ctx.clearRect(0, 0, rect.width, rect.height);
+}
+
+socket.on("draw", (data) => {
+  drawLine(data.from, data.to, data.color);
+});
+socket.on("clearCanvas", clearCanvasLocal);
+
+function redrawStrokes(strokes) {
+  clearCanvasLocal();
+  (strokes || []).forEach(s => drawLine(s.from, s.to, s.color));
+}
+</script>
+</body>
+</html>
