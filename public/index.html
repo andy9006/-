@@ -23,28 +23,27 @@
     color: var(--text);
     min-height: 100vh;
   }
-  .center-wrap {
-    max-width: 420px;
-    margin: 0 auto;
-    padding: 32px 20px;
-  }
+  .center-wrap { max-width: 460px; margin: 0 auto; padding: 28px 20px; }
   h1 { text-align: center; font-size: 24px; margin-bottom: 4px; }
-  .subtitle { text-align: center; color: #888; margin-bottom: 24px; font-size: 14px; }
+  .subtitle { text-align: center; color: #888; margin-bottom: 20px; font-size: 14px; }
   .card {
     background: var(--card);
     border-radius: 16px;
-    padding: 20px;
+    padding: 18px;
     box-shadow: 0 4px 16px rgba(0,0,0,0.06);
-    margin-bottom: 16px;
+    margin-bottom: 14px;
   }
-  input[type=text] {
+  .card h3 { margin: 0 0 10px 0; font-size: 15px; color: var(--primary); }
+  label.field-label { display: block; font-size: 13px; color: #666; margin: 10px 0 4px; font-weight: 600; }
+  input[type=text], input[type=number], textarea {
     width: 100%;
-    padding: 12px 14px;
+    padding: 11px 13px;
     border-radius: 10px;
     border: 1px solid #ddd;
-    font-size: 16px;
-    margin-bottom: 12px;
+    font-size: 15px;
+    font-family: inherit;
   }
+  textarea { resize: vertical; min-height: 64px; }
   button {
     width: 100%;
     padding: 12px;
@@ -58,51 +57,72 @@
   }
   button:active { opacity: 0.85; }
   button.secondary { background: #eee; color: var(--text); }
+  button.small { width: auto; padding: 8px 14px; font-size: 13px; }
   .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
   .tabs button { background: #eee; color: var(--text); }
   .tabs button.active { background: var(--primary); color: white; }
 
-  /* --- 遊戲畫面 --- */
-  #gameScreen { display: none; max-width: 720px; margin: 0 auto; padding: 12px; }
-  .top-bar {
-    display: flex; justify-content: space-between; align-items: center;
-    margin-bottom: 8px; flex-wrap: wrap; gap: 8px;
+  .radio-group { display: flex; gap: 10px; flex-wrap: wrap; }
+  .radio-pill {
+    flex: 1; min-width: 70px; text-align: center; padding: 9px 6px;
+    border: 2px solid #ddd; border-radius: 10px; cursor: pointer; font-size: 14px; user-select: none;
   }
-  .room-code { font-weight: 700; font-size: 18px; letter-spacing: 2px; }
+  .radio-pill.selected { border-color: var(--primary); background: #efeafe; color: var(--primary); font-weight: 700; }
+
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; }
+  .toggle-row span { font-size: 14px; }
+  .switch { position: relative; width: 46px; height: 26px; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider-toggle {
+    position: absolute; cursor: pointer; inset: 0; background: #ccc; border-radius: 26px; transition: 0.2s;
+  }
+  .slider-toggle:before {
+    content: ""; position: absolute; height: 20px; width: 20px; left: 3px; bottom: 3px;
+    background: white; border-radius: 50%; transition: 0.2s;
+  }
+  input:checked + .slider-toggle { background: var(--primary); }
+  input:checked + .slider-toggle:before { transform: translateX(20px); }
+
+  .bg-preview {
+    margin-top: 8px; width: 100%; height: 90px; border-radius: 10px; background-size: cover;
+    background-position: center; background-color: #f0f0f0; border: 1px dashed #ccc;
+    display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 13px;
+  }
+  .file-btn-row { display: flex; gap: 8px; margin-top: 8px; }
+  .file-btn-row button { width: auto; padding: 8px 14px; font-size: 13px; }
+
+  .hint-text { font-size: 13px; color: #999; text-align: center; }
+  .error-text { font-size: 13px; color: var(--danger); text-align: center; min-height: 18px; }
+
+  /* --- 遊戲畫面 --- */
+  #gameScreen {
+    display: none; max-width: 720px; margin: 0 auto; padding: 12px;
+    background-size: cover; background-position: center; border-radius: 14px;
+  }
+  #gameScreen .inner-panel { background: rgba(255,255,255,0.9); border-radius: 14px; padding: 10px; backdrop-filter: blur(2px); }
+  .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; flex-wrap: wrap; gap: 8px; }
+  .room-title { font-weight: 700; font-size: 16px; }
+  .room-code-sub { font-size: 12px; color: #888; }
   .timer { font-weight: 700; font-size: 18px; color: var(--primary); }
-  .word-hint { text-align: center; font-size: 20px; letter-spacing: 6px; margin: 8px 0; font-weight: 700; }
+  .round-progress { text-align: center; font-size: 13px; color: #888; margin-bottom: 2px; }
+  .word-hint { text-align: center; font-size: 20px; letter-spacing: 6px; margin: 6px 0; font-weight: 700; }
   .status-line { text-align: center; font-size: 14px; color: #666; margin-bottom: 8px; min-height: 18px; }
 
   #canvasWrap {
-    position: relative;
-    width: 100%;
-    aspect-ratio: 4 / 3;
-    background: white;
-    border-radius: 12px;
-    overflow: hidden;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
-    touch-action: none;
+    position: relative; width: 100%; aspect-ratio: 4 / 3; background: white;
+    border-radius: 12px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.08); touch-action: none;
   }
   #board { width: 100%; height: 100%; display: block; cursor: crosshair; }
   .draw-tools { display: flex; gap: 8px; margin: 10px 0; align-items: center; flex-wrap: wrap; }
-  .color-dot {
-    width: 26px; height: 26px; border-radius: 50%; border: 2px solid #ddd; cursor: pointer;
-  }
+  .color-dot { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #ddd; cursor: pointer; }
   .color-dot.selected { border-color: var(--primary); border-width: 3px; }
   .draw-tools button { width: auto; padding: 8px 14px; font-size: 14px; }
 
   #scoreboard { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
-  .player-row {
-    display: flex; justify-content: space-between; padding: 8px 12px;
-    background: white; border-radius: 8px; font-size: 14px;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
-  }
+  .player-row { display: flex; justify-content: space-between; padding: 8px 12px; background: white; border-radius: 8px; font-size: 14px; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
   .player-row.drawer { background: #fff3cd; font-weight: 700; }
 
-  #chatBox {
-    height: 140px; overflow-y: auto; background: white; border-radius: 10px;
-    padding: 8px 12px; font-size: 14px; margin-bottom: 8px;
-  }
+  #chatBox { height: 130px; overflow-y: auto; background: white; border-radius: 10px; padding: 8px 12px; font-size: 14px; margin-bottom: 8px; }
   #chatBox div { padding: 3px 0; }
   #chatBox .correct { color: var(--accent); font-weight: 700; }
   #chatBox .system { color: #999; font-style: italic; font-size: 12px; }
@@ -112,12 +132,27 @@
   .guess-row button { width: auto; padding: 10px 18px; }
 
   #qrWrap { text-align: center; margin: 12px 0; }
-  #qrWrap canvas, #qrWrap img { margin: 0 auto; }
-  .room-code-big {
-    text-align: center; font-size: 32px; font-weight: 800; letter-spacing: 6px;
-    color: var(--primary); margin: 8px 0;
+  .room-code-big { text-align: center; font-size: 32px; font-weight: 800; letter-spacing: 6px; color: var(--primary); margin: 8px 0; }
+
+  /* --- 結算畫面 --- */
+  #gameOverOverlay {
+    display: none; position: fixed; inset: 0; background: rgba(20,15,40,0.72);
+    z-index: 50; align-items: center; justify-content: center; padding: 20px;
   }
-  .hint-text { font-size: 13px; color: #999; text-align: center; }
+  #gameOverOverlay .modal {
+    background: white; border-radius: 18px; padding: 26px 22px; max-width: 380px; width: 100%;
+    max-height: 85vh; overflow-y: auto;
+  }
+  #gameOverOverlay h2 { text-align: center; margin: 0 0 4px; }
+  #gameOverOverlay .modal-sub { text-align: center; color: #999; font-size: 13px; margin-bottom: 16px; }
+  .rank-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; margin-bottom: 8px; background: #f7f6ff; }
+  .rank-row.top1 { background: linear-gradient(90deg,#ffe9a8,#fff3d0); }
+  .rank-row.top2 { background: linear-gradient(90deg,#e6e6e6,#f2f2f2); }
+  .rank-row.top3 { background: linear-gradient(90deg,#f0cdb0,#f7e2d0); }
+  .rank-medal { font-size: 20px; width: 28px; text-align: center; }
+  .rank-name { flex: 1; font-weight: 600; }
+  .rank-score { font-weight: 700; color: var(--primary); }
+  .modal-btns { display: flex; gap: 10px; margin-top: 16px; }
 </style>
 </head>
 <body>
@@ -132,23 +167,82 @@
     <button id="tabJoin">加入房間</button>
   </div>
 
-  <div class="card" id="createCard">
-    <input type="text" id="createName" placeholder="輸入你的暱稱" maxlength="12" />
+  <!-- 建立房間表單 -->
+  <div id="createCard">
+    <div class="card">
+      <h3>基本資料</h3>
+      <label class="field-label">你的暱稱</label>
+      <input type="text" id="createName" placeholder="輸入你的暱稱" maxlength="12" />
+      <label class="field-label">房間名稱（會顯示在遊戲畫面上方）</label>
+      <input type="text" id="roomName" placeholder="例如：週五下午茶你畫我猜" maxlength="24" />
+    </div>
+
+    <div class="card">
+      <h3>作畫規則</h3>
+      <div class="toggle-row">
+        <span>只有房主可以畫圖，其他人都用猜的</span>
+        <label class="switch">
+          <input type="checkbox" id="hostOnlyDraws" />
+          <span class="slider-toggle"></span>
+        </label>
+      </div>
+      <div class="hint-text" style="text-align:left; margin-top:4px;">關閉時，每回合會依序輪流換人畫圖</div>
+    </div>
+
+    <div class="card">
+      <h3>題目設定</h3>
+      <div class="radio-group" id="wordModeGroup">
+        <div class="radio-pill selected" data-value="random">隨機題庫</div>
+        <div class="radio-pill" data-value="custom">自訂詞彙</div>
+      </div>
+
+      <div id="randomModeFields" style="margin-top:10px;">
+        <label class="field-label">要玩幾題（1～20 題）</label>
+        <input type="number" id="totalRounds" min="1" max="20" value="5" />
+      </div>
+
+      <div id="customModeFields" style="display:none; margin-top:10px;">
+        <label class="field-label">自訂詞彙（用逗號或換行分隔，輸入幾個詞就玩幾題）</label>
+        <textarea id="customWords" placeholder="例如：蘋果, 貓咪, 腳踏車, 忍者"></textarea>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>作畫時間</h3>
+      <div class="radio-group" id="drawSecondsGroup">
+        <div class="radio-pill" data-value="10">10 秒</div>
+        <div class="radio-pill selected" data-value="30">30 秒</div>
+        <div class="radio-pill" data-value="60">60 秒</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>自訂背景圖片（選填）</h3>
+      <div class="bg-preview" id="bgPreview">尚未選擇圖片</div>
+      <div class="file-btn-row">
+        <input type="file" id="bgFileInput" accept="image/*" style="display:none;" />
+        <button type="button" class="secondary small" id="btnChooseBg">選擇圖片</button>
+        <button type="button" class="secondary small" id="btnClearBg">清除</button>
+      </div>
+      <div class="hint-text" style="margin-top:6px;">圖片會顯示在畫布外側作為房間背景</div>
+    </div>
+
     <button id="btnCreate">建立新房間</button>
   </div>
 
+  <!-- 加入房間表單 -->
   <div class="card" id="joinCard" style="display:none;">
     <input type="text" id="joinName" placeholder="輸入你的暱稱" maxlength="12" />
-    <input type="text" id="joinCode" placeholder="輸入房號（例如 AB3C7）" maxlength="6" style="text-transform:uppercase;" />
-    <button id="btnJoin">加入房間</button>
+    <input type="text" id="joinCode" placeholder="輸入房號（例如 AB3C7）" maxlength="6" style="text-transform:uppercase; margin-top:10px;" />
+    <button id="btnJoin" style="margin-top:10px;">加入房間</button>
   </div>
 
-  <div class="hint-text" id="homeMsg"></div>
+  <div class="error-text" id="homeMsg"></div>
 </div>
 
 <!-- ===== 房間等候畫面（顯示 QR Code）===== -->
 <div class="center-wrap" id="lobbyScreen" style="display:none;">
-  <h1>房間已建立</h1>
+  <h1 id="lobbyRoomName">房間已建立</h1>
   <div class="subtitle">請其他人掃描下方 QR Code 加入</div>
   <div class="card">
     <div class="room-code-big" id="lobbyCode">-----</div>
@@ -164,10 +258,15 @@
 
 <!-- ===== 遊戲畫面 ===== -->
 <div id="gameScreen">
+<div class="inner-panel">
   <div class="top-bar">
-    <div class="room-code">房號：<span id="gameRoomCode"></span></div>
+    <div>
+      <div class="room-title" id="gameRoomName"></div>
+      <div class="room-code-sub">房號：<span id="gameRoomCode"></span></div>
+    </div>
     <div class="timer">⏱ <span id="timerText">--</span>s</div>
   </div>
+  <div class="round-progress" id="roundProgress"></div>
   <div class="status-line" id="statusLine"></div>
   <div class="word-hint" id="wordHint"></div>
 
@@ -192,20 +291,33 @@
     <button id="btnGuess">送出</button>
   </div>
 </div>
+</div>
+
+<!-- ===== 最終結算畫面 ===== -->
+<div id="gameOverOverlay">
+  <div class="modal">
+    <h2>🏆 遊戲結束</h2>
+    <div class="modal-sub">最終排名</div>
+    <div id="rankList"></div>
+    <div class="modal-btns">
+      <button class="secondary" id="btnBackHome">返回首頁</button>
+      <button id="btnPlayAgain" style="display:none;">重新開始</button>
+    </div>
+  </div>
+</div>
 
 <script>
 const socket = io();
 let selfId = null;
+let roomHostId = null;
 let isDrawer = false;
 let currentColor = "#2d2d3a";
 let drawing = false;
 let lastPoint = null;
+let bgImageDataUrl = null;
 
 // ---------- 畫面切換 ----------
 function show(id) {
-  ["homeScreen","lobbyScreen","gameScreen"].forEach(s => {
-    document.getElementById(s).style.display = (s === id) ? "block" : "block";
-  });
   document.getElementById("homeScreen").style.display = id === "homeScreen" ? "block" : "none";
   document.getElementById("lobbyScreen").style.display = id === "lobbyScreen" ? "block" : "none";
   document.getElementById("gameScreen").style.display = id === "gameScreen" ? "block" : "none";
@@ -225,7 +337,6 @@ document.getElementById("tabJoin").onclick = () => {
   document.getElementById("createCard").style.display = "none";
 };
 
-// 若網址帶有 ?room=XXXXX，自動切到加入分頁並帶入房號
 const urlParams = new URLSearchParams(location.search);
 const prefilledRoom = urlParams.get("room");
 if (prefilledRoom) {
@@ -233,10 +344,87 @@ if (prefilledRoom) {
   document.getElementById("joinCode").value = prefilledRoom.toUpperCase();
 }
 
+// ---------- 建立房間表單：詞彙模式切換 ----------
+let wordMode = "random";
+document.querySelectorAll("#wordModeGroup .radio-pill").forEach(pill => {
+  pill.onclick = () => {
+    document.querySelectorAll("#wordModeGroup .radio-pill").forEach(p => p.classList.remove("selected"));
+    pill.classList.add("selected");
+    wordMode = pill.dataset.value;
+    document.getElementById("randomModeFields").style.display = wordMode === "random" ? "block" : "none";
+    document.getElementById("customModeFields").style.display = wordMode === "custom" ? "block" : "none";
+  };
+});
+
+let drawSecondsChoice = 30;
+document.querySelectorAll("#drawSecondsGroup .radio-pill").forEach(pill => {
+  pill.onclick = () => {
+    document.querySelectorAll("#drawSecondsGroup .radio-pill").forEach(p => p.classList.remove("selected"));
+    pill.classList.add("selected");
+    drawSecondsChoice = parseInt(pill.dataset.value, 10);
+  };
+});
+
+// ---------- 背景圖片選擇（含自動縮圖，避免檔案過大）----------
+document.getElementById("btnChooseBg").onclick = () => document.getElementById("bgFileInput").click();
+document.getElementById("bgFileInput").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const img = new Image();
+    img.onload = () => {
+      const maxDim = 1000;
+      let { width, height } = img;
+      if (width > maxDim || height > maxDim) {
+        const scale = maxDim / Math.max(width, height);
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+      }
+      const c = document.createElement("canvas");
+      c.width = width; c.height = height;
+      c.getContext("2d").drawImage(img, 0, 0, width, height);
+      bgImageDataUrl = c.toDataURL("image/jpeg", 0.72);
+      document.getElementById("bgPreview").style.backgroundImage = `url(${bgImageDataUrl})`;
+      document.getElementById("bgPreview").textContent = "";
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+});
+document.getElementById("btnClearBg").onclick = () => {
+  bgImageDataUrl = null;
+  document.getElementById("bgFileInput").value = "";
+  document.getElementById("bgPreview").style.backgroundImage = "";
+  document.getElementById("bgPreview").textContent = "尚未選擇圖片";
+};
+
+// ---------- 建立房間 ----------
 document.getElementById("btnCreate").onclick = () => {
   const name = document.getElementById("createName").value.trim() || "房主";
-  socket.emit("createRoom", name);
+  const roomName = document.getElementById("roomName").value.trim();
+  const hostOnlyDraws = document.getElementById("hostOnlyDraws").checked;
+
+  let customWords = [];
+  if (wordMode === "custom") {
+    const raw = document.getElementById("customWords").value;
+    customWords = raw.split(/[,，\n]/).map(w => w.trim()).filter(Boolean);
+    if (customWords.length === 0) {
+      document.getElementById("homeMsg").textContent = "請至少輸入一個自訂詞彙";
+      return;
+    }
+  }
+  const totalRounds = parseInt(document.getElementById("totalRounds").value, 10) || 5;
+
+  document.getElementById("homeMsg").textContent = "";
+  socket.emit("createRoom", {
+    name, roomName, hostOnlyDraws,
+    wordMode, customWords, totalRounds,
+    drawSeconds: drawSecondsChoice,
+    backgroundImage: bgImageDataUrl,
+  });
 };
+
 document.getElementById("btnJoin").onclick = () => {
   const name = document.getElementById("joinName").value.trim() || "玩家";
   const room = document.getElementById("joinCode").value.trim();
@@ -249,12 +437,31 @@ socket.on("errorMsg", (msg) => {
 });
 
 // ---------- 加入成功 ----------
+function applyRoomInfo(info) {
+  roomHostId = info.hostId;
+  document.getElementById("gameRoomName").textContent = info.roomName;
+  document.getElementById("lobbyRoomName").textContent = info.roomName;
+  const gs = document.getElementById("gameScreen");
+  if (info.backgroundImage) {
+    gs.style.backgroundImage = `url(${info.backgroundImage})`;
+  } else {
+    gs.style.backgroundImage = "none";
+  }
+}
+
 socket.on("joined", (data) => {
   selfId = data.selfId;
   document.getElementById("gameRoomCode").textContent = data.roomCode;
+  applyRoomInfo(data.roomInfo);
+
+  if (data.gameOverPayload) {
+    show("gameScreen");
+    resizeCanvas();
+    showGameOver(data.gameOverPayload);
+    return;
+  }
 
   if (!data.roundActive) {
-    // 尚未開始遊戲 -> 顯示等候室 + QR code
     document.getElementById("lobbyCode").textContent = data.roomCode;
     const link = `${location.origin}${location.pathname}?room=${data.roomCode}`;
     document.getElementById("lobbyLink").textContent = link;
@@ -266,6 +473,7 @@ socket.on("joined", (data) => {
     resizeCanvas();
     redrawStrokes(data.strokes);
     if (data.wordMask) document.getElementById("wordHint").textContent = data.wordMask;
+    document.getElementById("roundProgress").textContent = `第 ${data.roundNumber} / ${data.roomInfo.totalRounds} 題`;
   }
 });
 
@@ -273,17 +481,17 @@ socket.on("waitingForPlayers", () => {
   document.getElementById("statusLine").textContent = "等待更多玩家加入（至少需要 2 人）...";
 });
 
-// ---------- 玩家列表（等候室 + 遊戲中都會更新）----------
+// ---------- 玩家列表 ----------
 socket.on("players", (players) => {
   const lobbyDiv = document.getElementById("lobbyPlayers");
   if (lobbyDiv) {
-    lobbyDiv.innerHTML = players.map(p => `<div class="player-row">${p.name}</div>`).join("");
+    lobbyDiv.innerHTML = players.map(p => `<div class="player-row">${p.name}${p.isHost ? ' 👑' : ''}</div>`).join("");
   }
   const scoreDiv = document.getElementById("scoreboard");
   const sorted = [...players].sort((a,b) => b.score - a.score);
   scoreDiv.innerHTML = sorted.map(p => `
     <div class="player-row ${p.isDrawer ? 'drawer' : ''}">
-      <span>${p.isDrawer ? '✏️ ' : ''}${p.name}${p.id === selfId ? '（你）' : ''}</span>
+      <span>${p.isDrawer ? '✏️ ' : ''}${p.name}${p.isHost ? ' 👑' : ''}${p.id === selfId ? '（你）' : ''}</span>
       <span>${p.score} 分</span>
     </div>
   `).join("");
@@ -291,6 +499,7 @@ socket.on("players", (players) => {
 
 // ---------- 回合開始 ----------
 socket.on("roundStart", (data) => {
+  document.getElementById("gameOverOverlay").style.display = "none";
   show("gameScreen");
   resizeCanvas();
   clearCanvasLocal();
@@ -298,6 +507,7 @@ socket.on("roundStart", (data) => {
 
   document.getElementById("drawTools").style.display = isDrawer ? "flex" : "none";
   document.getElementById("board").style.pointerEvents = isDrawer ? "auto" : "none";
+  document.getElementById("roundProgress").textContent = `第 ${data.roundNumber} / ${data.totalRounds} 題`;
 
   if (isDrawer) {
     document.getElementById("wordHint").textContent = `請畫出：${data.word}`;
@@ -320,20 +530,33 @@ socket.on("roundEnd", (data) => {
     timeUp: "時間到！",
     notEnoughPlayers: "畫圖者離開，回合結束",
   };
-  document.getElementById("statusLine").textContent = `${msgMap[data.reason] || ""} 正確答案是：${data.word}（即將開始下一回合）`;
+  document.getElementById("statusLine").textContent = `${msgMap[data.reason] || ""} 正確答案是：${data.word}`;
   document.getElementById("wordHint").textContent = data.word;
 });
 
+// ---------- 遊戲結束 / 最終排名 ----------
+function showGameOver(data) {
+  const list = document.getElementById("rankList");
+  const medals = ["🥇","🥈","🥉"];
+  list.innerHTML = data.rankings.map((p, i) => `
+    <div class="rank-row ${i === 0 ? 'top1' : i === 1 ? 'top2' : i === 2 ? 'top3' : ''}">
+      <div class="rank-medal">${medals[i] || (i+1)}</div>
+      <div class="rank-name">${p.name}${p.id === selfId ? '（你）' : ''}</div>
+      <div class="rank-score">${p.score} 分</div>
+    </div>
+  `).join("");
+  document.getElementById("btnPlayAgain").style.display = (selfId === data.hostId) ? "block" : "none";
+  document.getElementById("gameOverOverlay").style.display = "flex";
+}
+socket.on("gameOver", (data) => showGameOver(data));
+
+document.getElementById("btnPlayAgain").onclick = () => socket.emit("playAgain");
+document.getElementById("btnBackHome").onclick = () => location.href = location.pathname;
+
 // ---------- 聊天 / 搶答結果 ----------
-socket.on("systemMsg", (text) => {
-  appendChat(`<div class="system">${text}</div>`);
-});
-socket.on("chatMsg", ({ name, text, correct }) => {
-  appendChat(`<div class="${correct ? 'correct' : ''}">${name}：${text}</div>`);
-});
-socket.on("correctGuess", ({ name, rank, points }) => {
-  appendChat(`<div class="correct">🎉 ${name} 第 ${rank} 個答對，獲得 ${points} 分！</div>`);
-});
+socket.on("systemMsg", (text) => appendChat(`<div class="system">${text}</div>`));
+socket.on("chatMsg", ({ name, text, correct }) => appendChat(`<div class="${correct ? 'correct' : ''}">${name}：${text}</div>`));
+socket.on("correctGuess", ({ name, rank, points }) => appendChat(`<div class="correct">🎉 ${name} 第 ${rank} 個答對，獲得 ${points} 分！</div>`));
 function appendChat(html) {
   const box = document.getElementById("chatBox");
   box.insertAdjacentHTML("beforeend", html);
@@ -349,9 +572,7 @@ function sendGuess() {
   input.value = "";
 }
 document.getElementById("btnGuess").onclick = sendGuess;
-document.getElementById("guessInput").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") sendGuess();
-});
+document.getElementById("guessInput").addEventListener("keydown", (e) => { if (e.key === "Enter") sendGuess(); });
 
 // ================= 畫布邏輯 =================
 const canvas = document.getElementById("board");
@@ -371,10 +592,7 @@ window.addEventListener("resize", resizeCanvas);
 function getPos(e) {
   const rect = canvas.getBoundingClientRect();
   const p = e.touches ? e.touches[0] : e;
-  return {
-    x: (p.clientX - rect.left) / rect.width,   // 存成 0~1 比例，讓不同裝置畫面對齊
-    y: (p.clientY - rect.top) / rect.height,
-  };
+  return { x: (p.clientX - rect.left) / rect.width, y: (p.clientY - rect.top) / rect.height };
 }
 
 function drawLine(from, to, color) {
@@ -387,11 +605,7 @@ function drawLine(from, to, color) {
   ctx.stroke();
 }
 
-function startDraw(e) {
-  if (!isDrawer) return;
-  drawing = true;
-  lastPoint = getPos(e);
-}
+function startDraw(e) { if (!isDrawer) return; drawing = true; lastPoint = getPos(e); }
 function moveDraw(e) {
   if (!isDrawer || !drawing) return;
   e.preventDefault();
@@ -416,20 +630,14 @@ document.querySelectorAll(".color-dot").forEach(dot => {
     currentColor = dot.dataset.color;
   };
 });
-document.getElementById("btnClear").onclick = () => {
-  clearCanvasLocal();
-  socket.emit("clearCanvas");
-};
+document.getElementById("btnClear").onclick = () => { clearCanvasLocal(); socket.emit("clearCanvas"); };
 function clearCanvasLocal() {
   const rect = canvas.getBoundingClientRect();
   ctx.clearRect(0, 0, rect.width, rect.height);
 }
 
-socket.on("draw", (data) => {
-  drawLine(data.from, data.to, data.color);
-});
+socket.on("draw", (data) => drawLine(data.from, data.to, data.color));
 socket.on("clearCanvas", clearCanvasLocal);
-
 function redrawStrokes(strokes) {
   clearCanvasLocal();
   (strokes || []).forEach(s => drawLine(s.from, s.to, s.color));

@@ -1,6 +1,5 @@
 // server.js
-// 你畫我猜小遊戲 - 伺服器端
-// 負責：房間管理 / 畫布同步廣播 / 搶答順序判定 / 計分 / 回合輪替
+// 你畫我猜小遊戲 - 伺服器端 (v2：支援自訂房間設定 + 最終排名結算)
 
 const express = require("express");
 const http = require("http");
@@ -9,11 +8,13 @@ const path = require("path");
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server, {
+  maxHttpBufferSize: 3 * 1024 * 1024, // 放寬到 3MB，讓背景圖片可以順利傳送
+});
 
 app.use(express.static(path.join(__dirname, "public")));
 
-// ---------- 題庫（可自行增減） ----------
+// ---------- 隨機題庫（可自行增減） ----------
 const WORD_LIST = [
   "蘋果", "香蕉", "西瓜", "貓咪", "狗狗", "大象", "長頸鹿", "企鵝",
   "太陽", "月亮", "彩虹", "雨傘", "腳踏車", "汽車", "飛機", "火車",
@@ -22,25 +23,25 @@ const WORD_LIST = [
   "機器人", "恐龍", "美人魚", "海盜", "忍者", "超人", "魔法師", "蝴蝶"
 ];
 
-const ROUND_SECONDS = 70; // 每回合秒數
+const ALLOWED_DRAW_SECONDS = [10, 30, 60];
+const MAX_RANDOM_ROUNDS = 20;
+const MAX_CUSTOM_WORDS = 30;
+const MAX_BG_IMAGE_CHARS = 2_500_000; // 粗略上限，避免記憶體爆掉
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
 
 // ---------- 記憶體中的房間資料 ----------
-// rooms[roomCode] = {
-//   players: Map(socketId -> {name, score}),
-//   order: [socketId, ...],          // 輪流畫圖的順序
-//   drawerIndex: 0,
-//   drawerId: null,
-//   currentWord: null,
-//   strokes: [],                     // 目前這一畫的所有筆畫，供新加入者補畫面
-//   correctGuessers: Set(),
-//   roundActive: false,
-//   timer: null,
-//   timeLeft: 0
-// }
 const rooms = {};
 
 function genRoomCode() {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // 去除易混淆字元
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let code;
   do {
     code = Array.from({ length: 5 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
@@ -56,6 +57,7 @@ function publicPlayerList(room) {
       name: room.players.get(id).name,
       score: room.players.get(id).score,
       isDrawer: id === room.drawerId,
+      isHost: id === room.hostId,
     }));
 }
 
@@ -66,8 +68,46 @@ function broadcastPlayers(roomCode) {
 }
 
 function maskWord(word) {
-  // 給非畫圖者看的提示：顯示字數，例如 "＿＿＿"
   return Array.from(word).map(() => "＿").join(" ");
+}
+
+function buildWordQueue(room) {
+  if (room.wordMode === "custom") {
+    return room.customWords.slice(0, room.totalRounds);
+  }
+  let pool = shuffle(WORD_LIST);
+  const queue = [];
+  while (queue.length < room.totalRounds) {
+    if (pool.length === 0) pool = shuffle(WORD_LIST);
+    queue.push(pool.pop());
+  }
+  return queue;
+}
+
+function roomInfoPayload(room) {
+  return {
+    roomName: room.roomName,
+    hostOnlyDraws: room.hostOnlyDraws,
+    drawSeconds: room.drawSeconds,
+    totalRounds: room.totalRounds,
+    backgroundImage: room.backgroundImage,
+    hostId: room.hostId,
+  };
+}
+
+function endGame(roomCode) {
+  const room = rooms[roomCode];
+  if (!room) return;
+  if (room.timer) clearInterval(room.timer);
+  room.roundActive = false;
+  room.gameOver = true;
+  room.drawerId = null;
+
+  const rankings = publicPlayerList(room)
+    .map((p) => ({ name: p.name, score: p.score, id: p.id }))
+    .sort((a, b) => b.score - a.score);
+
+  io.to(roomCode).emit("gameOver", { rankings, hostId: room.hostId });
 }
 
 function endRound(roomCode, reason) {
@@ -76,52 +116,62 @@ function endRound(roomCode, reason) {
   room.roundActive = false;
   if (room.timer) clearInterval(room.timer);
 
-  io.to(roomCode).emit("roundEnd", {
-    reason, // "allCorrect" | "timeUp" | "notEnoughPlayers"
-    word: room.currentWord,
-  });
+  io.to(roomCode).emit("roundEnd", { reason, word: room.currentWord });
 
-  // 3 秒後自動開始下一回合（若人數足夠）
-  setTimeout(() => startNextRound(roomCode), 3000);
+  setTimeout(() => startNextRound(roomCode), 2500);
 }
 
 function startNextRound(roomCode) {
   const room = rooms[roomCode];
-  if (!room) return;
+  if (!room || room.gameOver) return;
 
-  // 移除已離線的玩家
   room.order = room.order.filter((id) => room.players.has(id));
 
-  if (room.order.length < 2) {
+  if (room.hostOnlyDraws) {
+    if (!room.players.has(room.hostId)) {
+      endGame(roomCode);
+      return;
+    }
+    if (room.order.length < 2) {
+      io.to(roomCode).emit("waitingForPlayers");
+      return;
+    }
+  } else if (room.order.length < 2) {
     io.to(roomCode).emit("waitingForPlayers");
     return;
   }
 
-  room.drawerIndex = (room.drawerIndex + 1) % room.order.length;
-  room.drawerId = room.order[room.drawerIndex];
-  room.currentWord = WORD_LIST[Math.floor(Math.random() * WORD_LIST.length)];
+  room.roundNumber += 1;
+  if (room.roundNumber > room.totalRounds) {
+    endGame(roomCode);
+    return;
+  }
+
+  if (room.hostOnlyDraws) {
+    room.drawerId = room.hostId;
+  } else {
+    room.drawerIndex = (room.drawerIndex + 1) % room.order.length;
+    room.drawerId = room.order[room.drawerIndex];
+  }
+
+  room.currentWord = room.wordQueue[room.roundNumber - 1];
   room.strokes = [];
   room.correctGuessers = new Set();
   room.roundActive = true;
-  room.timeLeft = ROUND_SECONDS;
+  room.timeLeft = room.drawSeconds;
 
   const drawerName = room.players.get(room.drawerId).name;
-
-  // 畫圖者收到完整題目，其他人只收到字數提示
-  io.to(room.drawerId).emit("roundStart", {
-    isDrawer: true,
-    word: room.currentWord,
+  const common = {
     drawerName,
-    seconds: ROUND_SECONDS,
-  });
+    seconds: room.drawSeconds,
+    roundNumber: room.roundNumber,
+    totalRounds: room.totalRounds,
+  };
+
+  io.to(room.drawerId).emit("roundStart", { ...common, isDrawer: true, word: room.currentWord });
   room.order.forEach((id) => {
     if (id === room.drawerId) return;
-    io.to(id).emit("roundStart", {
-      isDrawer: false,
-      wordMask: maskWord(room.currentWord),
-      drawerName,
-      seconds: ROUND_SECONDS,
-    });
+    io.to(id).emit("roundStart", { ...common, isDrawer: false, wordMask: maskWord(room.currentWord) });
   });
 
   broadcastPlayers(roomCode);
@@ -130,29 +180,85 @@ function startNextRound(roomCode) {
   room.timer = setInterval(() => {
     room.timeLeft -= 1;
     io.to(roomCode).emit("tick", room.timeLeft);
-    if (room.timeLeft <= 0) {
-      endRound(roomCode, "timeUp");
-    }
+    if (room.timeLeft <= 0) endRound(roomCode, "timeUp");
   }, 1000);
 }
 
+function startFreshGame(roomCode, resetScores) {
+  const room = rooms[roomCode];
+  if (!room) return;
+  room.wordQueue = buildWordQueue(room);
+  room.roundNumber = 0;
+  room.drawerIndex = -1;
+  room.drawerId = null;
+  room.gameOver = false;
+  if (resetScores) {
+    room.players.forEach((p) => (p.score = 0));
+  }
+  startNextRound(roomCode);
+}
+
 io.on("connection", (socket) => {
-  // ---- 建立房間 ----
-  socket.on("createRoom", (name) => {
+  // ---- 建立房間（含自訂設定） ----
+  socket.on("createRoom", (payload = {}) => {
     const roomCode = genRoomCode();
+
+    let drawSeconds = parseInt(payload.drawSeconds, 10);
+    if (!ALLOWED_DRAW_SECONDS.includes(drawSeconds)) drawSeconds = 30;
+
+    let wordMode = payload.wordMode === "custom" ? "custom" : "random";
+    let customWords = [];
+    let totalRounds = 5;
+
+    if (wordMode === "custom") {
+      customWords = Array.isArray(payload.customWords)
+        ? payload.customWords.map((w) => String(w).trim()).filter(Boolean).slice(0, MAX_CUSTOM_WORDS)
+        : [];
+      if (customWords.length === 0) {
+        socket.emit("errorMsg", "自訂詞彙不能是空的，請至少輸入一個詞。");
+        return;
+      }
+      totalRounds = customWords.length;
+    } else {
+      totalRounds = parseInt(payload.totalRounds, 10);
+      if (!Number.isFinite(totalRounds) || totalRounds < 1) totalRounds = 5;
+      if (totalRounds > MAX_RANDOM_ROUNDS) totalRounds = MAX_RANDOM_ROUNDS;
+    }
+
+    let backgroundImage = null;
+    if (typeof payload.backgroundImage === "string" && payload.backgroundImage.startsWith("data:image")) {
+      if (payload.backgroundImage.length <= MAX_BG_IMAGE_CHARS) {
+        backgroundImage = payload.backgroundImage;
+      }
+    }
+
+    const roomName = (payload.roomName || "").toString().trim().slice(0, 24) || "你畫我猜遊戲房";
+
     rooms[roomCode] = {
       players: new Map(),
       order: [],
+      hostId: null,
+      hostOnlyDraws: !!payload.hostOnlyDraws,
+      roomName,
+      drawSeconds,
+      wordMode,
+      customWords,
+      totalRounds,
+      wordQueue: [],
+      backgroundImage,
+      roundNumber: 0,
       drawerIndex: -1,
       drawerId: null,
       currentWord: null,
       strokes: [],
       correctGuessers: new Set(),
       roundActive: false,
+      gameOver: false,
       timer: null,
       timeLeft: 0,
     };
-    joinRoom(socket, roomCode, name || "房主");
+
+    joinRoom(socket, roomCode, payload.name || "房主", true);
   });
 
   // ---- 加入房間 ----
@@ -162,50 +268,58 @@ io.on("connection", (socket) => {
       socket.emit("errorMsg", "找不到這個房間，請確認房號或重新掃描 QR Code。");
       return;
     }
-    joinRoom(socket, roomCode, name || "玩家");
+    joinRoom(socket, roomCode, name || "玩家", false);
   });
 
-  function joinRoom(socket, roomCode, name) {
+  function joinRoom(socket, roomCode, name, isCreator) {
     const room = rooms[roomCode];
     socket.join(roomCode);
     socket.data.roomCode = roomCode;
-    room.players.set(socket.id, { name: name.slice(0, 12), score: 0 });
+    room.players.set(socket.id, { name: String(name).slice(0, 12), score: 0 });
     room.order.push(socket.id);
+    if (isCreator) room.hostId = socket.id;
+
+    let gameOverPayload = null;
+    if (room.gameOver) {
+      const rankings = publicPlayerList(room).map((p) => ({ name: p.name, score: p.score, id: p.id }))
+        .sort((a, b) => b.score - a.score);
+      gameOverPayload = { rankings, hostId: room.hostId };
+    }
 
     socket.emit("joined", {
       roomCode,
       selfId: socket.id,
       strokes: room.strokes,
       currentDrawerId: room.drawerId,
-      wordMask: room.currentWord ? maskWord(room.currentWord) : null,
+      wordMask: room.currentWord && room.roundActive ? maskWord(room.currentWord) : null,
       roundActive: room.roundActive,
       timeLeft: room.timeLeft,
+      roundNumber: room.roundNumber,
+      roomInfo: roomInfoPayload(room),
+      gameOverPayload,
     });
 
     io.to(roomCode).emit("systemMsg", `${name} 加入了房間`);
     broadcastPlayers(roomCode);
 
-    // 已經有 2 人以上且目前沒有進行中的回合 -> 開始遊戲
-    if (room.order.length >= 2 && !room.roundActive) {
-      startNextRound(roomCode);
+    if (room.order.length >= 2 && !room.roundActive && !room.gameOver && room.roundNumber === 0) {
+      startFreshGame(roomCode, false);
     }
   }
 
   // ---- 畫布同步 ----
   socket.on("draw", (data) => {
-    const roomCode = socket.data.roomCode;
-    const room = rooms[roomCode];
-    if (!room || socket.id !== room.drawerId) return; // 只有畫圖者能畫
+    const room = rooms[socket.data.roomCode];
+    if (!room || socket.id !== room.drawerId) return;
     room.strokes.push(data);
-    socket.to(roomCode).emit("draw", data);
+    socket.to(socket.data.roomCode).emit("draw", data);
   });
 
   socket.on("clearCanvas", () => {
-    const roomCode = socket.data.roomCode;
-    const room = rooms[roomCode];
+    const room = rooms[socket.data.roomCode];
     if (!room || socket.id !== room.drawerId) return;
     room.strokes = [];
-    socket.to(roomCode).emit("clearCanvas");
+    socket.to(socket.data.roomCode).emit("clearCanvas");
   });
 
   // ---- 搶答 ----
@@ -213,29 +327,25 @@ io.on("connection", (socket) => {
     const roomCode = socket.data.roomCode;
     const room = rooms[roomCode];
     if (!room || !room.roundActive) return;
-    if (socket.id === room.drawerId) return; // 畫圖者不能自己猜
-    if (room.correctGuessers.has(socket.id)) return; // 已經答對過
+    if (socket.id === room.drawerId) return;
+    if (room.correctGuessers.has(socket.id)) return;
 
     const guesserName = room.players.get(socket.id)?.name || "玩家";
     const clean = (text || "").trim();
     if (!clean) return;
 
     const isCorrect = clean === room.currentWord;
-
     if (!isCorrect) {
-      // 一般聊天/錯誤猜測也廣播出去，增加互動感
       io.to(roomCode).emit("chatMsg", { name: guesserName, text: clean, correct: false });
       return;
     }
 
-    // ---- 答對：依「伺服器收到的先後順序」計分，公平且不可作弊 ----
     room.correctGuessers.add(socket.id);
-    const rank = room.correctGuessers.size; // 第幾個答對
+    const rank = room.correctGuessers.size;
     const points = Math.max(10 - (rank - 1) * 2, 2);
     const player = room.players.get(socket.id);
     player.score += points;
 
-    // 畫圖者也給一點鼓勵分數
     const drawer = room.players.get(room.drawerId);
     if (drawer) drawer.score += 2;
 
@@ -243,10 +353,20 @@ io.on("connection", (socket) => {
     io.to(roomCode).emit("correctGuess", { name: guesserName, rank, points });
     broadcastPlayers(roomCode);
 
-    const totalGuessers = room.order.length - 1; // 扣掉畫圖者
+    const totalGuessers = room.order.length - 1;
     if (room.correctGuessers.size >= totalGuessers) {
       endRound(roomCode, "allCorrect");
     }
+  });
+
+  // ---- 房主再玩一輪 ----
+  socket.on("playAgain", () => {
+    const roomCode = socket.data.roomCode;
+    const room = rooms[roomCode];
+    if (!room) return;
+    if (socket.id !== room.hostId) return;
+    if (!room.gameOver) return;
+    startFreshGame(roomCode, true);
   });
 
   // ---- 離線處理 ----
@@ -269,11 +389,14 @@ io.on("connection", (socket) => {
       return;
     }
 
+    if (room.hostOnlyDraws && socket.id === room.hostId && room.roundActive) {
+      endGame(roomCode);
+      return;
+    }
+
     if (wasDrawer && room.roundActive) {
       endRound(roomCode, "notEnoughPlayers");
-    } else if (room.order.length < 2) {
-      if (room.timer) clearInterval(room.timer);
-      room.roundActive = false;
+    } else if (room.order.length < 2 && room.roundActive === false && !room.gameOver) {
       io.to(roomCode).emit("waitingForPlayers");
     }
   });
